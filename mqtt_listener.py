@@ -36,29 +36,23 @@ def data_from_message(topic, payload):
         data = data_item.split(':')         
         valor = float(data[1])        
                
-        if data[0] == constants.KEY_TEMPERATURA_AMBIENTE:
-            #print('Temperatura Ambiente:', data[1])            
+        if data[0] == constants.KEY_TEMPERATURA_AMBIENTE:          
             tipo_medicion = constants.TEMPERATURA_AMBIENTE
             
         if data[0] == constants.KEY_TEMPERATURA_SUJETO:
-            #print('Temperatura Sujeto:', data[1])
             tipo_medicion = constants.TEMPERATURA_SUJETO
 
         if data[0] == constants.KEY_CO2:
-            #print('CO2:', data[1])
             tipo_medicion = constants.CO2
 
         if data[0] == constants.KEY_SPO2:
-            #print('SPO2:', data[1])
             tipo_medicion = constants.SPO2
 
-        if data[0] == constants.KEY_FRECUENCIA_CARDIACA:
-            #print('Frecuencia cardiaca:', data[1])    
+        if data[0] == constants.KEY_FRECUENCIA_CARDIACA:   
             tipo_medicion = constants.FRECUENCIA_CARDIACA         
         
-        meas = medicion.Medicion(valor, fecha, key_dispositivo, tipo_medicion)
+        meas = medicion.Medicion(valor, fecha, tipo_medicion, key_dispositivo, tipo_dispositivo)
         ret_list.append(meas)
-        #print(meas)
 
     return ret_list
 
@@ -74,8 +68,28 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
     for meas in meas_list:
         print(meas)
     
+        conn = sqlite3.connect('db/checking.sqlite')
+        cur = conn.cursor()
+        
+        query = 'SELECT id FROM dispositivos WHERE key = ?'
+        cur.execute(query, (meas.key_dispositivo,))
+        id_dispositivo = cur.fetchone()[0]
+        
+        print('[id_dispositivo]', id_dispositivo)
+        
+        query = '''INSERT INTO mediciones
+                    (valor, fecha, id_dispositivo, tipo_medicion) 
+                    VALUES 
+                    (?, ?, ?, ?)'''
+            
+        data_tuple = (meas.valor, meas.fecha, id_dispositivo, meas.tipo_medicion)
+        cur.execute(query, data_tuple)
+        conn.commit()
+        
+        cur.close()
+        conn.close()        
 
-client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID “digi_mqtt_test”
+client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID gibio_test_mqtt
 client.on_connect = on_connect  # Define callback function for successful connection
 client.on_message = on_message  # Define callback function for receipt of a message
 client.connect(constants.MQTT_SERVER_HOSTNAME, constants.MQTT_SERVER_PORT)
