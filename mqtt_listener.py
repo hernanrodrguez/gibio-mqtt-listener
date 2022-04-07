@@ -64,12 +64,32 @@ def on_connect(client, userdata, flags, rc):  # The callback for when the client
 def on_message(client, userdata, msg):  # The callback for when a PUBLISH message is received from the server.
     print("Message received-> " + msg.topic + " " + str(msg.payload))  # Print a received msg
     meas_list = data_from_message(msg.topic, str(msg.payload.decode("utf-8"))) 
+
+    conn = sqlite3.connect('db/checking.sqlite')
+    cur = conn.cursor()
+
+    cur.execute("SELECT key FROM dispositivos")
+    dispos = cur.fetchall()
+    print("[keys]")
+
+    for dispo in dispos:
+        print(dispo)
+
     print('[meas_list]')
     for meas in meas_list:
-        print(meas)
-    
-        conn = sqlite3.connect('db/checking.sqlite')
-        cur = conn.cursor()
+        print(meas)   
+
+        if (meas.key_dispositivo,) not in dispos:
+            query = '''INSERT INTO dispositivos
+                    (key, tipo_dispositivo) 
+                    VALUES 
+                    (?, ?)'''
+            
+            data_tuple = (meas.key_dispositivo, meas.tipo_dispositivo)
+            cur.execute(query, data_tuple)
+            conn.commit()   
+
+            dispos.append((meas.key_dispositivo,))
         
         query = 'SELECT id FROM dispositivos WHERE key = ?'
         cur.execute(query, (meas.key_dispositivo,))
@@ -86,8 +106,8 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
         cur.execute(query, data_tuple)
         conn.commit()
         
-        cur.close()
-        conn.close()        
+    cur.close()
+    conn.close()        
 
 client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID gibio_test_mqtt
 client.on_connect = on_connect  # Define callback function for successful connection
