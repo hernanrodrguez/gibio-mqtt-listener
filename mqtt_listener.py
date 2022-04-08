@@ -56,6 +56,30 @@ def data_from_message(topic, payload):
 
     return ret_list
 
+def db_create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+    except Error as e:
+        print(e)
+
+    return conn
+
+def db_get_query(conn, table, columns="*", clause=""):
+    cur = conn.cursor()
+
+    if isinstance(columns, list):
+        columns = ", ".join(columns)
+    if len(clause) > 1:
+        clause = "WHERE {}".format(clause)
+
+    my_str = "SELECT {} FROM {} {}".format(columns, table, clause)
+    
+    cur.execute(my_str)
+    ret = cur.fetchall()
+    cur.close()
+    return ret
+
 def on_connect(client, userdata, flags, rc):  # The callback for when the client connects to the broker
     print("Connected with result code {0}".format(str(rc)))  # Print result of connection attempt
     client.subscribe("#")  # Subscribe to all topics
@@ -65,9 +89,14 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
     print("Message received-> " + msg.topic + " " + str(msg.payload))  # Print a received msg
     meas_list = data_from_message(msg.topic, str(msg.payload.decode("utf-8"))) 
 
-    conn = sqlite3.connect('db/checking.sqlite')
-    cur = conn.cursor()
+    conn = db_create_connection("db/checking.sqlite")
+    with conn:
+        dispos = db_get_query(conn, "dispositivos", "key")
+        for dispo in dispos:
+            print(dispo)
 
+    '''
+    cur = conn.cursor()
     cur.execute("SELECT key FROM dispositivos")
     dispos = cur.fetchall()
     print("[keys]")
@@ -80,10 +109,10 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
         print(meas)   
 
         if (meas.key_dispositivo,) not in dispos:
-            query = '''INSERT INTO dispositivos
+            query = \'''INSERT INTO dispositivos
                     (key, tipo_dispositivo) 
                     VALUES 
-                    (?, ?)'''
+                    (?, ?)\'''
             
             data_tuple = (meas.key_dispositivo, meas.tipo_dispositivo)
             cur.execute(query, data_tuple)
@@ -97,16 +126,16 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
         
         print('[id_dispositivo]', id_dispositivo)
         
-        query = '''INSERT INTO mediciones
+        query = \'''INSERT INTO mediciones
                     (valor, fecha, id_dispositivo, tipo_medicion) 
                     VALUES 
-                    (?, ?, ?, ?)'''
+                    (?, ?, ?, ?)\'''
             
         data_tuple = (meas.valor, meas.fecha, id_dispositivo, meas.tipo_medicion)
         cur.execute(query, data_tuple)
         conn.commit()
-        
-    cur.close()
+    
+    cur.close()'''
     conn.close()        
 
 client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID gibio_test_mqtt
@@ -114,4 +143,12 @@ client.on_connect = on_connect  # Define callback function for successful connec
 client.on_message = on_message  # Define callback function for receipt of a message
 client.connect(constants.MQTT_SERVER_HOSTNAME, constants.MQTT_SERVER_PORT)
 client.loop_forever()  # Start networking daemon
+'''
+db_get_query(None, "dispositivos")
+db_get_query(None, "dispositivos", "key")
+db_get_query(None, "dispositivos", ["key", "id", "tipo"])
+
+db_get_query(None, "dispositivos")
+db_get_query(None, "dispositivos", "key", "id=1")
+db_get_query(None, "dispositivos", ["key", "id", "tipo"])'''
 
