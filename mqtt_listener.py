@@ -15,7 +15,6 @@ def data_from_message(topic, payload):
     fecha = time.mktime(datetime.datetime.now().timetuple())
     fecha = fecha - 3 * 60 * 60 # Resto 3 horas por la zona horaria
 
-    # print('[data_from_message] topic:' + topic + ' - payload:' + payload)
     topic = topic.split('/')
 
     key_dispositivo = topic[2]
@@ -89,6 +88,18 @@ def db_get_query_value(conn, table, columns="*", clause="", value=[]):
     cur.close()
     return ret
 
+def db_get_query_values(conn, table, columns="*", clause="", value=[]):
+    cur = conn.cursor()
+
+    if isinstance(columns, list):
+        columns = ", ".join(columns)
+
+    query = "SELECT {} FROM {} WHERE {} ?".format(columns, table, clause)
+    cur.execute(query, (value,))
+    ret = cur.fetchall()
+    cur.close()
+    return ret
+
 def db_insert_query(conn, table, columns, values):
     cur = conn.cursor()
     question_marks = "?"
@@ -109,21 +120,41 @@ def on_connect(client, userdata, flags, rc):  # The callback for when the client
 
 def on_message(client, userdata, msg):  # The callback for when a PUBLISH message is received from the server.
     print("Message received-> " + msg.topic + " " + str(msg.payload))  # Print a received msg
-    meas_list = data_from_message(msg.topic, str(msg.payload.decode("utf-8")))
-    conn = db_create_connection("db/checking.sqlite")
-    with conn:
-        dispos = db_get_query(conn, "dispositivos", "key")
-        for meas in meas_list:
-            if (meas.key_dispositivo,) not in dispos:
-                db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], [meas.key_dispositivo, meas.tipo_dispositivo])
+    if (msg.topic).split("/")[1] != "request":
+        meas_list = data_from_message(msg.topic, str(msg.payload.decode("utf-8")))
+        conn = db_create_connection("db/checking.sqlite")
+        with conn:
+            dispos = db_get_query(conn, "dispositivos", "key")
+            for meas in meas_list:
+                if (meas.key_dispositivo,) not in dispos:
+                    db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], [meas.key_dispositivo, meas.tipo_dispositivo])
 
-            id = db_get_query_value(conn, "dispositivos", "id", "key = ", meas.key_dispositivo)
-            db_insert_query( conn,
-                            "mediciones",
-                            ["valor", "fecha", "id_dispositivo", "tipo_medicion"],
-                            [meas.valor, meas.fecha, id, meas.tipo_medicion]
-                           )
-    conn.close()
+                id = db_get_query_value(conn, "dispositivos", "id", "key = ", meas.key_dispositivo)
+                db_insert_query( conn,
+                                "mediciones",
+                                ["valor", "fecha", "id_dispositivo", "tipo_medicion"],
+                                [meas.valor, meas.fecha, id, meas.tipo_medicion]
+                               )
+                print("Saved -> " + str(meas))
+        conn.close()
+    else:
+        payload = str(msg.payload.decode("utf-8"))
+        table = (msg.topic).split("/")[2]
+        column =  payload.split("-")[0]
+        clause = (payload.split("-")[1]).split(":")[0]
+        value = (payload.split("-")[1]).split(":")[1]
+        print(payload)
+        print(table)
+        print(column)
+        print(clause)
+        print(value)
+        conn = db_create_connection("db/checking.sqlite")
+        with conn:
+            dispos = db_get_query_values(conn, table, column, clause + " = ", value)
+            print(dispos)
+        # key_dispositivo-tipo_dispositivo:1
+        # db_get_query_value(conn, table, columns="*", clause="", value=[])
+
 
 client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID gibio_test_mqtt
 client.on_connect = on_connect  # Define callback function for successful connection
@@ -143,3 +174,8 @@ client.loop_forever()  # Start networking daemon
 #
 # db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], ["aula_01", 1])
 # db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], ["aula_02", 1])
+#
+# Como hacer para request data: avisar en el topic que vamos a pedir datos para que nos lo devuelva el servidor
+# Ejemplo topic (generico): test/request/dipositivos_mediciones
+# Ejemplo payload (pido todos los dispositivos habitacion): key_dispositivo-tipo_dispositivo:1
+# Osea que seria: lo_que_quiero-condicion
