@@ -5,6 +5,7 @@ import dispositivo as d
 import medicion as m
 import constants
 import sqlite3
+import json
 
 def data_from_message(topic, payload):
     valor = float()
@@ -70,7 +71,8 @@ def on_connect(client, userdata, flags, rc):  # The callback for when the client
 
 def on_message(client, userdata, msg):  # The callback for when a PUBLISH message is received from the server.
     payload = str(msg.payload.decode("utf-8"))
-    print("Message received-> " + msg.topic + " " + payload)  # Print a received msg
+    if msg.topic != "respuesta":
+        print("Message received-> " + msg.topic + " " + payload)  # Print a received msg
     if msg.topic.split("/")[0] == constants.SEND: # El equipo envia datos
         meas_list = data_from_message(msg.topic, payload) # Obtengo una lista de mediciones a partir del mensaje
         conn = db_create_connection(constants.DATABASE)
@@ -111,19 +113,22 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
                     cur.execute("SELECT * FROM dispositivos WHERE tipo_dispositivo = " + str(tipo_dispositivo))
                 devices = cur.fetchall()
                 for device in devices:
-                    dispositivos.append(d.Dispositivo(device)) # Genero una lista con los dispositivos a responder
-                for dispositivo in dispositivos:
-                    print(dispositivo)  # Printeo
+                    dispositivos.append(vars(d.Dispositivo(device))) # Genero una lista con los dispositivos a responder
+
+                # print(json.dumps(dispositivos))  # Printeo
+                client.publish("respuesta", json.dumps(dispositivos))
+
                 cur.close()
             elif table == constants.MEASUREMENTS:  # Quiere consultar por las mediciones
                 mediciones = list()
-                cur.execute("SELECT * FROM mediciones WHERE " + payload)
+                cur.execute("SELECT * FROM mediciones WHERE " + payload) # Las condiciones para consultar las debe establecer quien manda el mensaje
                 measurements = cur.fetchall()
                 for measurement in measurements:
-                    #print(measurement)
-                    mediciones.append(m.Medicion(measurement)) # Genero una lista con los dispositivos a responder
-                for medicion in mediciones:
-                    print(str(medicion))
+                    mediciones.append(vars(m.Medicion(measurement))) # Genero una lista con los dispositivos a responder
+
+                # print(json.dumps(mediciones))
+                client.publish("respuesta", json.dumps(mediciones))
+
                 cur.close()
 
 
@@ -132,23 +137,3 @@ client.on_connect = on_connect  # Define callback function for successful connec
 client.on_message = on_message  # Define callback function for receipt of a message
 client.connect(constants.MQTT_SERVER_HOSTNAME, constants.MQTT_SERVER_PORT)
 client.loop_forever()  # Start networking daemon
-
-# SECCION DE TESTEO
-# conn = db_create_connection("db/checking.sqlite")
-# db_get_query(None, "dispositivos")
-# db_get_query(None, "dispositivos", "key")
-# db_get_query(None, "dispositivos", ["key", "id", "tipo"])
-#
-# db_get_query(None, "dispositivos")
-# db_get_query(None, "dispositivos", "key", "id=1")
-# db_get_query(None, "dispositivos", ["key", "id", "tipo"])
-#
-# db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], ["aula_01", 1])
-# db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], ["aula_02", 1])
-#
-# Como hacer para request data: avisar en el topic que vamos a pedir datos para que nos lo devuelva el servidor
-# Ejemplo topic (generico): test/request/dipositivos_mediciones
-# Ejemplo payload (pido todos los dispositivos habitacion): key-tipo_dispositivo:1
-# Ejemplo payload (pido todas las mediciones de XX de una habitacion): aula01-tipo_medicion:1
-# Busco el id del dispo a partir de su key. Con el id y el tipo de medicion obtengo las mediciones
-# Osea que seria: lo_que_quiero-condicion
