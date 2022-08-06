@@ -2,7 +2,7 @@ import paho.mqtt.client as mqtt
 import datetime
 import time
 import dispositivo as d
-import medicion
+import medicion as m
 import constants
 import sqlite3
 
@@ -30,7 +30,7 @@ def data_from_message(topic, payload):
     data_list = payload.split('-')
 
     for data_item in data_list:
-        meas = medicion.Medicion()
+        meas = m.Medicion()
 
         data = data_item.split(':')
         valor = float(data[1])
@@ -50,7 +50,7 @@ def data_from_message(topic, payload):
         if data[0] == constants.KEY_FRECUENCIA_CARDIACA:
             tipo_medicion = constants.FRECUENCIA_CARDIACA
 
-        meas = medicion.Medicion(valor, fecha, tipo_medicion, key_dispositivo, tipo_dispositivo)
+        meas = m.Medicion(valor, fecha, tipo_medicion, key_dispositivo, tipo_dispositivo)
         ret_list.append(meas)
 
     return ret_list
@@ -63,70 +63,6 @@ def db_create_connection(db_file):
         print(e)
 
     return conn
-
-def db_get_query(conn, table, columns="*"):
-    cur = conn.cursor()
-
-    if isinstance(columns, list):
-        columns = ", ".join(columns)
-
-    my_str = "SELECT {} FROM {}".format(columns, table)
-    cur.execute(my_str)
-    ret = cur.fetchall()
-    cur.close()
-    return ret
-
-def db_get_query_value(conn, table, columns="*", clause="", value=[]):
-    cur = conn.cursor()
-
-    if isinstance(columns, list):
-        columns = ", ".join(columns)
-
-    query = "SELECT {} FROM {} WHERE {} ?".format(columns, table, clause)
-    print(query)
-    print(value)
-    cur.execute(query, (value,))
-    ret = cur.fetchone()[0]
-    cur.close()
-    return ret
-
-# meas = db_get_query_values(conn, "mediciones", "valor", ["id_dispositivo", "tipo_medicion"] , [id, value])
-def db_get_query_values(conn, table, columns="*", clause="", value=[]):
-    cur = conn.cursor()
-
-    if isinstance(columns, list):
-        columns = ", ".join(columns)
-
-    query = "SELECT {} FROM {} WHERE {}".format(columns, table, clause)
-    print(query)
-    cur.execute(query, tuple(value))
-    ret = cur.fetchall()
-    cur.close()
-    return ret
-
-def db_insert_query(conn, table, columns, values):
-    cur = conn.cursor()
-    question_marks = "?"
-
-    for i in range(len(columns)-1):
-        question_marks += ", ?"
-    if isinstance(columns, list):
-        columns = ", ".join(columns)
-
-    query = "INSERT INTO {} ({}) VALUES ({})".format(table, columns, question_marks)
-    cur.execute(query, tuple(values))
-    conn.commit()
-    cur.close()
-
-# Me fijo que es lo que voy a tener que hacer segun el topic
-def check_topic(topic):
-    topic = topic.split("/")
-    if topic[0] == constants.SEND: # el dispositivo quiere enviar datos
-        return True
-    elif topic[0] == constants.REQUEST: # el dispositivo quiere pedir datos
-        return True
-    else: # el topic no cumple con el formato propuesto, ignoro todo lo que venga
-        return False
 
 def on_connect(client, userdata, flags, rc):  # The callback for when the client connects to the broker
     print("Connected with result code {0}".format(str(rc)))  # Print result of connection attempt
@@ -180,37 +116,15 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
                     print(dispositivo)  # Printeo
                 cur.close()
             elif table == constants.MEASUREMENTS:  # Quiere consultar por las mediciones
+                mediciones = list()
                 cur.execute("SELECT * FROM mediciones WHERE " + payload)
-                print(cur.fetchall())
+                measurements = cur.fetchall()
+                for measurement in measurements:
+                    #print(measurement)
+                    mediciones.append(m.Medicion(measurement)) # Genero una lista con los dispositivos a responder
+                for medicion in mediciones:
+                    print(str(medicion))
                 cur.close()
-
-
-
-    # else:
-    #     payload = str(msg.payload.decode("utf-8"))
-    #
-    #     if table == "dispositivos":
-    #         column =  payload.split("-")[0]
-    #         clause = (payload.split("-")[1]).split(":")[0]
-    #         value = (payload.split("-")[1]).split(":")[1]
-    #         conn = db_create_connection("db/checking.sqlite")
-    #         with conn:
-    #             dispos = db_get_query_values(conn, table, column, clause + " = ?", value)
-    #             print(dispos)
-    #     else:
-    #         column =  payload.split("-")[0]
-    #         value = (payload.split("-")[1]).split(":")[1]
-    #         conn = db_create_connection("db/checking.sqlite")
-    #         with conn:
-    #             id = db_get_query_value(conn, "dispositivos", "id", "key =", column)
-    #             print(id)
-    #             meas = db_get_query_values(conn, "mediciones", "valor", "id_dispositivo=? AND tipo_medicion=?" , [id, value])
-    #             # tengo que hacer que me concatene las condiciones para leer con muchas a la vez
-    #             # https://www.tutorialspoint.com/sqlite/sqlite_and_or_clauses.htm
-    #             # https://stackoverflow.com/questions/23273242/multiple-where-clauses-in-sqlite3-python
-    #             print(meas)
-    #     # key-tipo_medicion:1
-    #     # db_get_query_value(conn, table, columns="*", clause="", value=[])
 
 
 client = mqtt.Client("gibio_test_mqtt")  # Create instance of client with client ID gibio_test_mqtt

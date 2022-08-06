@@ -17,7 +17,15 @@ class Medicion:
         else:
             raise TypeError("No se recibio ni fecha ni número de muestra")
 
+    def __init__(self, tup):
+        self.valor = tup[1]
+        self.tipo_medicion = tup[5]
+        self.id_dispositivo = tup[4]
+        self.fecha = tup[2]
+        self.muestra = tup[3]
+        self.key_dispositivo = ""
+        self.tipo_dispositivo = None
+
+
     def __str__(self):
         return 'Medicion(valor=' + str(self.valor) + ', tipo_medicion=' + str(self.tipo_medicion) + ', fecha=' +  datetime.utcfromtimestamp(self.fecha).strftime('%d/%m/%Y-%H:%M:%S') + ', muestra=' + str(self.muestra) + ', key_dispositivo=' + self.key_dispositivo + ', tipo_dispositivo=' + str(self.tipo_dispositivo) + ')'
-
-    
