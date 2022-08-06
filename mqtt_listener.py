@@ -83,19 +83,23 @@ def db_get_query_value(conn, table, columns="*", clause="", value=[]):
         columns = ", ".join(columns)
 
     query = "SELECT {} FROM {} WHERE {} ?".format(columns, table, clause)
+    print(query)
+    print(value)
     cur.execute(query, (value,))
     ret = cur.fetchone()[0]
     cur.close()
     return ret
 
+# meas = db_get_query_values(conn, "mediciones", "valor", ["id_dispositivo", "tipo_medicion"] , [id, value])
 def db_get_query_values(conn, table, columns="*", clause="", value=[]):
     cur = conn.cursor()
 
     if isinstance(columns, list):
         columns = ", ".join(columns)
 
-    query = "SELECT {} FROM {} WHERE {} ?".format(columns, table, clause)
-    cur.execute(query, (value,))
+    query = "SELECT {} FROM {} WHERE {}".format(columns, table, clause)
+    print(query)
+    cur.execute(query, tuple(value))
     ret = cur.fetchall()
     cur.close()
     return ret
@@ -129,7 +133,7 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
                 if (meas.key_dispositivo,) not in dispos:
                     db_insert_query(conn, "dispositivos", ["key", "tipo_dispositivo"], [meas.key_dispositivo, meas.tipo_dispositivo])
 
-                id = db_get_query_value(conn, "dispositivos", "id", "key = ", meas.key_dispositivo)
+                id = db_get_query_value(conn, "dispositivos", "id", "key = ?", meas.key_dispositivo)
                 db_insert_query( conn,
                                 "mediciones",
                                 ["valor", "fecha", "id_dispositivo", "tipo_medicion"],
@@ -140,19 +144,32 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
     else:
         payload = str(msg.payload.decode("utf-8"))
         table = (msg.topic).split("/")[2]
-        column =  payload.split("-")[0]
-        clause = (payload.split("-")[1]).split(":")[0]
-        value = (payload.split("-")[1]).split(":")[1]
-        print(payload)
-        print(table)
-        print(column)
-        print(clause)
-        print(value)
-        conn = db_create_connection("db/checking.sqlite")
-        with conn:
-            dispos = db_get_query_values(conn, table, column, clause + " = ", value)
-            print(dispos)
-        # key_dispositivo-tipo_dispositivo:1
+        if table == "dispositivos":
+            column =  payload.split("-")[0]
+            clause = (payload.split("-")[1]).split(":")[0]
+            value = (payload.split("-")[1]).split(":")[1]
+            print(payload)
+            print(table)
+            print(column)
+            print(clause)
+            print(value)
+            conn = db_create_connection("db/checking.sqlite")
+            with conn:
+                dispos = db_get_query_values(conn, table, column, clause + " = ", value)
+                print(dispos)
+        else:
+            column =  payload.split("-")[0]
+            value = (payload.split("-")[1]).split(":")[1]
+            conn = db_create_connection("db/checking.sqlite")
+            with conn:
+                id = db_get_query_value(conn, "dispositivos", "id", "key =", column)
+                print(id)
+                meas = db_get_query_values(conn, "mediciones", "valor", "id_dispositivo=? AND tipo_medicion=?" , [id, value])
+                # tengo que hacer que me concatene las condiciones para leer con muchas a la vez
+                # https://www.tutorialspoint.com/sqlite/sqlite_and_or_clauses.htm
+                # https://stackoverflow.com/questions/23273242/multiple-where-clauses-in-sqlite3-python
+                print(meas)
+        # key-tipo_medicion:1
         # db_get_query_value(conn, table, columns="*", clause="", value=[])
 
 
@@ -177,5 +194,7 @@ client.loop_forever()  # Start networking daemon
 #
 # Como hacer para request data: avisar en el topic que vamos a pedir datos para que nos lo devuelva el servidor
 # Ejemplo topic (generico): test/request/dipositivos_mediciones
-# Ejemplo payload (pido todos los dispositivos habitacion): key_dispositivo-tipo_dispositivo:1
+# Ejemplo payload (pido todos los dispositivos habitacion): key-tipo_dispositivo:1
+# Ejemplo payload (pido todas las mediciones de XX de una habitacion): aula01-tipo_medicion:1
+# Busco el id del dispo a partir de su key. Con el id y el tipo de medicion obtengo las mediciones
 # Osea que seria: lo_que_quiero-condicion
