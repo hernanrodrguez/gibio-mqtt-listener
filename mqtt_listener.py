@@ -31,7 +31,7 @@ def data_from_message(topic, payload):
     data_list = payload.split('-')
 
     for data_item in data_list:
-        meas = m.Medicion()
+        # meas = m.Medicion()
 
         data = data_item.split(':')
         valor = float(data[1])
@@ -115,19 +115,55 @@ def on_message(client, userdata, msg):  # The callback for when a PUBLISH messag
                 for device in devices:
                     dispositivos.append(vars(d.Dispositivo(device))) # Genero una lista con los dispositivos a responder
 
-                # print(json.dumps(dispositivos))  # Printeo
-                client.publish("respuesta", json.dumps(dispositivos))
+                print(json.dumps(dispositivos))  # Printeo
+                client.publish("respuesta/dispositivos", json.dumps(dispositivos))
 
                 cur.close()
             elif table == constants.MEASUREMENTS:  # Quiere consultar por las mediciones
                 mediciones = list()
-                cur.execute("SELECT * FROM mediciones WHERE " + payload) # Las condiciones para consultar las debe establecer quien manda el mensaje
-                measurements = cur.fetchall()
-                for measurement in measurements:
-                    mediciones.append(vars(m.Medicion(measurement))) # Genero una lista con los dispositivos a responder
+                measurements = list()
+                try:
+                    if (msg.topic).split("/")[2] == "last": # Quiere la ultima medicion de cada tipo del dispositivo
+                        query = "SELECT * FROM mediciones WHERE " + payload + " AND tipo_medicion=? ORDER BY fecha DESC"
+                        # print(query)
+                        cur.execute(query, (1,))
+                        # print(cur.fetchone())
+                        measurements.append(m.Medicion(cur.fetchone()))
+                        query = "SELECT * FROM mediciones WHERE " + payload + " AND tipo_medicion=? ORDER BY fecha DESC"
+                        # print(query)
+                        cur.execute(query, (2,))
+                        # print(cur.fetchone())
+                        measurements.append(m.Medicion(cur.fetchone()))
+                        query = "SELECT * FROM mediciones WHERE " + payload + " AND tipo_medicion=? ORDER BY fecha DESC"
+                        # print(query)
+                        cur.execute(query, (3,))
+                        # print(cur.fetchone())
+                        measurements.append(m.Medicion(cur.fetchone()))
+                        query = "SELECT * FROM mediciones WHERE " + payload + " AND tipo_medicion=? ORDER BY fecha DESC"
+                        # print(query)
+                        cur.execute(query, (4,))
+                        # print(cur.fetchone())
+                        measurements.append(m.Medicion(cur.fetchone()))
+                        query = "SELECT * FROM mediciones WHERE " + payload + " AND tipo_medicion=? ORDER BY fecha DESC"
+                        # print(query)
+                        cur.execute(query, (5,))
+                        # print(cur.fetchone())
+                        measurements.append(m.Medicion(cur.fetchone()))
 
-                # print(json.dumps(mediciones))
-                client.publish("respuesta", json.dumps(mediciones))
+                    for measurement in measurements:
+                        mediciones.append(vars(measurement)) # Genero una lista con los dispositivos a responder
+
+                    print(json.dumps(mediciones))
+                    client.publish("respuesta/mediciones/last", json.dumps(mediciones))
+                except:
+                    query = "SELECT * FROM mediciones WHERE " + payload + " ORDER BY fecha ASC"
+                    cur.execute(query)
+                    measurements = cur.fetchall()
+                    for measurement in measurements:
+                        mediciones.append(vars(m.Medicion(measurement))) # Genero una lista con los dispositivos a responder
+
+                    print(json.dumps(mediciones))  # Printeo
+                    client.publish("respuesta/mediciones", json.dumps(mediciones))
 
                 cur.close()
 
